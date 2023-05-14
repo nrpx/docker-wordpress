@@ -2,69 +2,6 @@ version: "3"
 
 services:
 
-  # Traefik Reverse Proxy and SSL Management
-  # Traefik will reverse proxy requests to different applications in the stack.
-  # This application is composed of one single frontend application, WordPress. If
-  # you wanted to expose more applications, for example, phpmyadmin, portainer, etc,
-  # you could add the appropriate traefik labels to those services, and traefik will
-  # automatically add ssl through ssl (unless you manually supply ssl certs) and
-  # exposeing them to the frontend.
-  traefik:
-    image: traefik:${TRAEFIK_VERSION:-v2.7}
-    restart: always
-    command:
-      - --accesslog
-      - --api.insecure=true
-      - --providers.docker
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --entrypoints.web.http.redirections.entrypoint.permanent=true
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.le.acme.email=${LE_EMAIL:-email@example.com}
-      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.tlschallenge=true
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - le_data:/letsencrypt
-    ports:
-      - 80:80
-      - 443:443
-      - 8080:8080
-    networks:
-      - traefik
-
-  # Nginx
-  # Nginx is being used to reverse proxy to the php-fpm process being
-  # served by the WordPress service. It also passes static asset requests
-  # from Traefik to to WordPress.
-  nginx:
-    depends_on:
-      - wordpress
-    image: nginx:${NGINX_VERSION:-1.21-alpine}
-    restart: always
-    environment:
-      - NGINX_HOST=${NGINX_HOST:-wordpress.local}
-    volumes:
-      - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
-      - ./.docker/nginx/conf.d:/etc/nginx/conf.d
-    expose:
-      - 80
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.wordpress.rule=Host(`${NGINX_HOST:-wordpress.local}`)
-      - traefik.http.routers.wordpress.tls=true
-      - traefik.http.routers.wordpress.tls.certresolver=le
-    extra_hosts:
-      - ${NGINX_HOST:-wordpress.local}:127.0.0.1
-    networks:
-      traefik:
-      wordpress:
-        ipv4_address: 10.5.0.100 # static ip for loopback on reverse proxy
-
   # WordPress FPM
   # This is the WordPress service with php-fpm. It could be replaced with the
   # Apache WordPress image but Nginx typically offers better static file performance.
@@ -73,7 +10,7 @@ services:
       db:
         condition: service_healthy
     # build: ./wordpress
-    image: wordpress:${WORDPRESS_VERSION:-6.0-fpm-alpine}
+    image: wordpress:${WORDPRESS_VERSION:-6-fpm-alpine}
     restart: always
     environment:
       WORDPRESS_DB_HOST: db:3306
@@ -81,58 +18,54 @@ services:
       WORDPRESS_DB_USER: ${DB_USER:-wordpress}
       WORDPRESS_DB_PASSWORD: ${DB_PASS:-password}
       WORDPRESS_DEBUG: ${WP_DEBUG:-0}
+      WORDPRESS_TABLE_PREFIX: ${WP_TABLE_PREFIX:-wp_}
       WORDPRESS_CONFIG_EXTRA: |
         /* Redis Ojbect Cache */
         define( 'WP_REDIS_HOST', 'redis' );
         define( 'WP_REDIS_PORT', 6379 );
         /* Nginx Cache */
-        define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' );
+        /* define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' ); */
     volumes:
-      - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
+      - wp_root:/var/www/html
+      - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
+      # - ./wordpress/plugins:/var/www/html/wp-content/plugins
+      # - ./wordpress/themes:/var/www/html/wp-content/themes
       - ./.docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
-      - ~/.ssh/id_rsa/:/root/.ssh/id_rsa
-    extra_hosts:
-      - ${NGINX_HOST:-wordpress.local}:10.5.0.100
-    networks:
-      - wordpress
 
   # WordPress CLI
   # Manage your WordPress installation with the WP CLI. Under the scripts folder,
   # this service is being used to sync the database and uploads from a production
   # server.
-  wpcli:
-    depends_on:
-      db:
-        condition: service_healthy
-    image: wordpress:cli
-    user: xfs
-    environment:
-      WORDPRESS_DB_HOST: db:3306
-      WORDPRESS_DB_NAME: ${DB_NAME:-wordpress}
-      WORDPRESS_DB_USER: ${DB_USER:-wordpress}
-      WORDPRESS_DB_PASSWORD: ${DB_PASS:-password}
-      WORDPRESS_CONFIG_EXTRA: |
-        /* Redis Ojbect Cache */
-        define( 'WP_REDIS_HOST', 'redis' );
-        define( 'WP_REDIS_PORT', 6379 );
-        /* Nginx Cache */
-        define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' );
-    volumes:
-      - wp_data:/var/www/html
-      - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      - ./wordpress/themes:/var/www/html/wp-content/themes
-    networks:
-      - wordpress
+  # wpcli:
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   image: wordpress:cli
+  #   user: xfs
+  #   environment:
+  #     WORDPRESS_DB_HOST: db:3306
+  #     WORDPRESS_DB_NAME: ${DB_NAME:-wordpress}
+  #     WORDPRESS_DB_USER: ${DB_USER:-wordpress}
+  #     WORDPRESS_DB_PASSWORD: ${DB_PASS:-password}
+  #     WORDPRESS_CONFIG_EXTRA: |
+  #       /* Redis Ojbect Cache */
+  #       define( 'WP_REDIS_HOST', 'redis' );
+  #       define( 'WP_REDIS_PORT', 6379 );
+  #       /* Nginx Cache */
+  #       define( 'RT_WP_NGINX_HELPER_CACHE_PATH', '/var/run/nginx-cache' );
+  #   volumes:
+  #     - wp_data:/var/www/html
+  #     - ./wordpress/plugins:/var/www/html/wp-content/plugins
+  #     - ./wordpress/themes:/var/www/html/wp-content/themes
+  #   networks:
+  #     - wordpress
 
   # MariaDB
   # This MariaDB service adds a database for the WordPress application.
   db:
-    image: mariadb:${MARIADB_VERSION:-10.7}
+    image: mariadb:${MARIADB_VERSION:-10}
     volumes:
-      - db_data:/var/lib/mysql
-      - db_socket:/var/lib/mysqld
+      - ${DATA_PATH:-/opt/project}/db:/var/lib/mysql
       - ./.docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
     restart: always
     environment:
@@ -141,52 +74,49 @@ services:
       MYSQL_USER: ${DB_USER:-wordpress}
       MYSQL_PASSWORD: ${DB_PASS:-password}
     healthcheck:
-      test: mysqladmin ping -h 127.0.0.1 -u root --password=$${DB_ROOT_PASSWORD:-password}
+      test: mariadb-admin -uroot --password=${DB_ROOT_PASSWORD:-password} ping
       interval: 5s
       retries: 10
-    networks:
-      - wordpress
 
   # Redis
   # This stack uses Redis as a Database Object Cache for WordPress
   redis:
-    image: redis:${REDIS_VERSION:-7.0-alpine}
+    image: redis:${REDIS_VERSION:-7-alpine}
     restart: always
     volumes:
-      - redis_data:/data
-    networks:
+      - ${DATA_PATH:-/opt/project}/redis:/data
+
+  nginx:
+    depends_on:
       - wordpress
+    image: nginx:${NGINX_VERSION:-stable-alpine-slim}
+    restart: always
+    environment:
+      - NGINX_HOST=${NGINX_HOST:-wordpress.local}
+    volumes:
+      - wp_root:/var/www/html
+      - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
+      # - ./wordpress/plugins:/var/www/html/wp-content/plugins
+      # - ./wordpress/themes:/var/www/html/wp-content/themes
+      - ./.docker/nginx/conf.d:/etc/nginx/conf.d
+    networks:
+      - default
+      - npm_nw
 
   # Watchtower
   # Automatically pull new docker images as they're updated. This is useful for
   # private sites behind a VPN that don't have public access to tools like webhooks
   # for deploying changes. It's important to lock down your versions to major ranges.
-  watchtower:
-    image: containrrr/watchtower:latest
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 30
+  # watchtower:
+  #   image: containrrr/watchtower:latest
+  #   restart: always
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 30
 
 volumes:
-  db_data:
-    driver: local
-  db_socket:
-    driver: local
-  wp_data:
-    driver: local
-  redis_data:
-    driver: local
-  le_data:
-    driver: local
+  wp_root:
+
 networks:
-  traefik:
-    driver: bridge
-    name: traefik
-  wordpress:
-    driver: bridge
-    name: wordpress
-    ipam:
-      driver: default
-      config:
-        - subnet: 10.5.0.0/24
+  npm_nw:
+    external: true
