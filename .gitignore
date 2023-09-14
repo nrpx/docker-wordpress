@@ -7,6 +7,7 @@
 *.tar.gz
 *.zip
 .DS_Store
+.idea
 
 # wordpress plugins
 wordpress/plugins/hello.php

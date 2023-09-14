@@ -98,7 +98,7 @@ services:
       - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
       # - ./wordpress/plugins:/var/www/html/wp-content/plugins
       # - ./wordpress/themes:/var/www/html/wp-content/themes
-      - ./.docker/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+      - ./.docker/nginx/conf.d:/etc/nginx/conf.d:z
     networks:
       - default
       - npm_nw
