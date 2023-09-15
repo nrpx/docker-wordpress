@@ -89,14 +89,16 @@ services:
   nginx:
     depends_on:
       - wordpress
-    image: nginx:${NGINX_VERSION:-stable-alpine-slim}
+    build:
+      context: .docker/nginx
+      args:
+        NGINX_VERSION: ${NGINX_VERSION:-stable-alpine-slim}
     restart: always
     environment:
       - NGINX_HOST=${NGINX_HOST:-wordpress.local}
     volumes:
       - wp_root:/var/www/html
       - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
-      - ./.docker/nginx/conf.d:/etc/nginx/conf.d:ro
       # - ./wordpress/plugins:/var/www/html/wp-content/plugins
       # - ./wordpress/themes:/var/www/html/wp-content/themes
     networks:
