@@ -81,6 +81,8 @@ services:
     restart: always
     volumes:
       - ${DATA_PATH:-/opt/project}/redis:/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   nginx:
     depends_on:
