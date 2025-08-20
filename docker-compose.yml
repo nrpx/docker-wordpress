@@ -10,7 +10,7 @@ services:
       db:
         condition: service_healthy
     # build: ./wordpress
-    image: wordpress:${WORDPRESS_VERSION:-6-fpm-alpine}
+    image: wordpress:${WORDPRESS_VERSION:-6-php8.4-fpm-alpine}
     restart: always
     environment:
       WORDPRESS_DB_HOST: db:3306
@@ -28,8 +28,6 @@ services:
     volumes:
       - wp_root:/var/www/html
       - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
-      # - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      # - ./wordpress/themes:/var/www/html/wp-content/themes
       - ./.docker/php/custom.ini:/usr/local/etc/php/conf.d/custom.ini
 
   # WordPress CLI
@@ -61,7 +59,7 @@ services:
   #     - wordpress
 
   # MariaDB
-  # This MariaDB service adds a database for the WordPress application.
+  # TODO: Switch to Postgres as there is no benefit to staying on MariaDB.
   db:
     image: mariadb:${MARIADB_VERSION:-10}
     volumes:
@@ -78,10 +76,8 @@ services:
       interval: 5s
       retries: 10
 
-  # Redis
-  # This stack uses Redis as a Database Object Cache for WordPress
   redis:
-    image: redis:${REDIS_VERSION:-7-alpine}
+    image: redis:${REDIS_VERSION:-8-alpine}
     restart: always
     volumes:
       - ${DATA_PATH:-/opt/project}/redis:/data
@@ -93,28 +89,17 @@ services:
       context: .docker/nginx
       args:
         NGINX_VERSION: ${NGINX_VERSION:-stable-alpine-slim}
+    pull_policy: never
+    image: nrpx/wp-nginx:latest
     restart: always
     environment:
       - NGINX_HOST=${NGINX_HOST:-wordpress.local}
     volumes:
       - wp_root:/var/www/html
       - ${DATA_PATH:-/opt/project}/wp_data:/var/www/html/wp-content
-      # - ./wordpress/plugins:/var/www/html/wp-content/plugins
-      # - ./wordpress/themes:/var/www/html/wp-content/themes
     networks:
       - default
       - npm_nw
-
-  # Watchtower
-  # Automatically pull new docker images as they're updated. This is useful for
-  # private sites behind a VPN that don't have public access to tools like webhooks
-  # for deploying changes. It's important to lock down your versions to major ranges.
-  # watchtower:
-  #   image: containrrr/watchtower:latest
-  #   restart: always
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   command: --interval 30
 
 volumes:
   wp_root:
