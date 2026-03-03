@@ -77,7 +77,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:${REDIS_VERSION:-8-alpine}
+    image: valkey/valkey:${VALKEY_VERSION:-alpine}
     restart: always
     volumes:
       - ${DATA_PATH:-/opt/project}/redis:/data
