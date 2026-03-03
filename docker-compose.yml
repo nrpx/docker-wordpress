@@ -79,6 +79,8 @@ services:
   redis:
     image: valkey/valkey:${VALKEY_VERSION:-alpine}
     restart: always
+    environment:
+      VALKEY_EXTRA_FLAGS: ${VALKEY_EXTRA_FLAGS:---save 60 1 --loglevel warning}
     volumes:
       - ${DATA_PATH:-/opt/project}/redis:/data
     labels:
